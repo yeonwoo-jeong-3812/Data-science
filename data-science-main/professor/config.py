@@ -80,42 +80,7 @@ class PhysicsUtils:
         cd_alpha = 0.1 * np.sin(2 * alpha_rad)**2
         
         return cd_base + cd_alpha
-    @staticmethod
-    def get_aerodynamic_coefficients(missile_data, mach, alpha_rad, beta_rad):
-        """
-        마하 수, 받음각, 옆미끄럼각에 따른 공력 계수 반환 (6DoF용)
-        """
-        
-        def interp_table(table, mach):
-            mach_points = sorted(table.keys())
-            return np.interp(mach, mach_points, [table[m] for m in mach_points])
-        
-        # 받음각과 마하수에 따른 Cd, Cl, Cm 룩업 테이블
-        cd_table = missile_data.get("cd_table", {})
-        cl_table = missile_data.get("cl_table", {})
-        cm_table = missile_data.get("cm_table", {})
-        
-        # 테이블이 비어있으면 기본값 사용
-        if not cd_table or not cl_table or not cm_table:
-            cd_base = 0.3
-            cl_base = 2.0
-            cm_base = -0.5
-        else:
-            cd_base = interp_table(cd_table, mach)
-            cl_base = interp_table(cl_table, mach)
-            cm_base = interp_table(cm_table, mach)
-        
-        # 받음각에 따른 항력 및 양력 계수 보정
-        Cd = cd_base + 0.5 * (np.sin(alpha_rad))**2
-        Cl = cl_base * np.sin(alpha_rad)
-        
-        # 모멘트 계수 (피치, 요, 롤) - 단순화된 모델
-        Cm = cm_base * np.sin(alpha_rad)
-        Cn = 0.0  # 옆미끄럼각에 따른 요 모멘트 (단순화)
-        Cl_roll = 0.0 # 롤 모멘트 (단순화)
 
-        return Cd, Cl, Cm, Cn, Cl_roll
-        
 # Neural ODE 상태 벡터 정의
 class StateVector:
     """Neural ODE 상태 벡터 관리 클래스"""

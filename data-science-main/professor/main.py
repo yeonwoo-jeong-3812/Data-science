@@ -5,7 +5,7 @@ Missile Trajectory Simulation - 원본 기반 최소 수정 버전
 """
 import os
 # Qt Wayland 플러그인 오류 방지를 위한 환경 변수 설정
-# os.environ["QT_QPA_PLATFORM"] = "xcb"
+os.environ["QT_QPA_PLATFORM"] = "xcb"
 
 import numpy as np
 import matplotlib
@@ -706,18 +706,7 @@ class MissileSimulation:
         else:
             dgamma = 0
         
-        # 부드러운 요(방위) 프로그램 추가: 피치 단계 동안 측면으로 천천히 회전하여 3D 궤적 형성
-        # 목표: 작은 뱀(S-turn) 형태의 좌우 요 잔진동으로 단일 평면에서 벗어나게 함
-        # 매개변수 (필요시 조정): 진폭(도), 주파수(Hz), 최대 요율(도/s)
-        weave_amp_deg = 8.0
-        weave_freq_hz = 0.20
-        max_yaw_rate_deg_s = 8.0
-        # 진행도 기반 스무딩 (0→1): 피치 진행도 이용
-        yaw_rate = (weave_amp_deg * cfg.DEG_TO_RAD) * (2*np.pi*weave_freq_hz) * np.cos(2*np.pi*weave_freq_hz * max(0.0, t - self.vertical_time))
-        yaw_rate *= pitch_progress  # 시작과 끝에서 0으로 완만히
-        # 안전 제한
-        yaw_rate = float(np.clip(yaw_rate, -max_yaw_rate_deg_s*cfg.DEG_TO_RAD, max_yaw_rate_deg_s*cfg.DEG_TO_RAD))
-        dpsi = yaw_rate
+        dpsi = 0  # 피치 단계에서는 방위각 변화 없음
         
         # 위치 변화 - 수정된 좌표계 적용
         # X = 동쪽, Y = 북쪽으로 가정
@@ -812,17 +801,7 @@ class MissileSimulation:
         max_dgamma = 0.1  # 최대 각속도 제한 (rad/s)
         dgamma = np.clip(dgamma, -max_dgamma, max_dgamma)
         
-        # 요(방위) 위빙 유지: 피치 이후에도 소규모 좌우 요로 3D 궤적 유지
-        weave_amp_deg = 5.0
-        weave_freq_hz = 0.15
-        max_yaw_rate_deg_s = 6.0
-        # 피치 종료 시각 이후부터의 경과시간 기반 위빙 (점차 약화되는 감쇠 포함)
-        t_since_pitch = max(0.0, t - (self.vertical_time + self.pitch_time))
-        decay = np.exp(-t_since_pitch/60.0)  # 1분 시간상수로 서서히 약화
-        yaw_rate = (weave_amp_deg * cfg.DEG_TO_RAD) * (2*np.pi*weave_freq_hz) * np.cos(2*np.pi*weave_freq_hz * t_since_pitch)
-        yaw_rate *= decay
-        yaw_rate = float(np.clip(yaw_rate, -max_yaw_rate_deg_s*cfg.DEG_TO_RAD, max_yaw_rate_deg_s*cfg.DEG_TO_RAD))
-        dpsi = yaw_rate
+        dpsi = 0  # 등자세 단계에서는 방위각 변화 없음
         
         # 위치 변화 - 수정된 좌표계 적용
         dx = V_safe * np.cos(gamma) * np.sin(psi)  # 동쪽 성분
@@ -917,17 +896,7 @@ class MissileSimulation:
         max_dgamma = 0.05  # 관성비행에서는 더 작은 제한
         dgamma = np.clip(dgamma, -max_dgamma, max_dgamma)
         
-        # 관성 비행에서도 약한 좌우 요 위빙을 유지해 평면 탈출
-        weave_amp_deg = 2.0
-        weave_freq_hz = 0.05
-        max_yaw_rate_deg_s = 3.0
-        # 고도가 높을수록 위빙을 더 약하게 (시각적으로 과도한 곡률 방지)
-        high_alt_factor = 1.0 / (1.0 + max(0.0, h)/100000.0)  # ~100km 스케일로 약화
-        t_since_const = max(0.0, t - (self.burn_time))
-        yaw_rate = (weave_amp_deg * cfg.DEG_TO_RAD) * (2*np.pi*weave_freq_hz) * np.cos(2*np.pi*weave_freq_hz * t_since_const)
-        yaw_rate *= high_alt_factor
-        yaw_rate = float(np.clip(yaw_rate, -max_yaw_rate_deg_s*cfg.DEG_TO_RAD, max_yaw_rate_deg_s*cfg.DEG_TO_RAD))
-        dpsi = yaw_rate
+        dpsi = 0  # 관성비행에서는 방위각 변화 없음
         
         # 위치 변화 - 수정된 좌표계 적용
         dx = V_safe * np.cos(gamma) * np.sin(psi)  # 동쪽 성분

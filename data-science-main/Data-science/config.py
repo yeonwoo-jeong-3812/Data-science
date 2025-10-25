@@ -81,11 +81,36 @@ class PhysicsUtils:
         
         return cd_base + cd_alpha
     @staticmethod
-    def get_aerodynamic_coefficients(missile_data, mach, alpha_rad, beta_rad):
+    def get_aerodynamic_coefficients(missile_data, mach, alpha_rad, beta_rad, q_pitch_rate=0.0, r_yaw_rate=0.0):
         """
-        마하 수, 받음각, 옆미끄럼각에 따른 공력 계수 반환 (6DoF용)
-        """
+        댐핑 추가 버전 - 6DoF용 공력 계수 계산
         
+        Parameters
+        ----------
+        missile_data : dict
+            미사일 정보
+        mach : float
+            마하 수
+        alpha_rad : float
+            받음각 (라디안)
+        beta_rad : float
+            옆미끄럼각 (라디안)
+        q_pitch_rate : float, optional
+            피치 각속도 (rad/s), 기본값 0.0
+        r_yaw_rate : float, optional
+            요 각속도 (rad/s), 기본값 0.0
+        
+        Returns
+        -------
+        tuple of float
+            (Cd, Cl, Cm, Cn, Cl_roll)
+            - Cd: 항력 계수
+            - Cl: 양력 계수
+            - Cm: 피치 모멘트 계수
+            - Cn: 요 모멘트 계수
+            - Cl_roll: 롤 모멘트 계수
+        """
+
         def interp_table(table, mach):
             mach_points = sorted(table.keys())
             return np.interp(mach, mach_points, [table[m] for m in mach_points])
@@ -109,12 +134,38 @@ class PhysicsUtils:
         Cd = cd_base + 0.5 * (np.sin(alpha_rad))**2
         Cl = cl_base * np.sin(alpha_rad)
         
-        # 모멘트 계수 (피치, 요, 롤) - 단순화된 모델
-        Cm = cm_base * np.sin(alpha_rad)
-        Cn = 0.0  # 옆미끄럼각에 따른 요 모멘트 (단순화)
-        Cl_roll = 0.0 # 롤 모멘트 (단순화)
-
-        return Cd, Cl, Cm, Cn, Cl_roll
+        # ========== ✨ 댐핑 계수 추가 (핵심 개선 사항) ========== #
+    
+        # 1. 댐핑 계수 (미사일 데이터에서 가져오거나 기본값 사용)
+        cm_q_damping = missile_data.get("cm_q_damping", -10.0)  # 피치 댐핑
+        cn_r_damping = missile_data.get("cn_r_damping", -8.0)   # 요 댐핑
+        
+        # 2. 특성 길이 및 속도
+        L_ref = missile_data["length"]  # 기준 길이 (m)
+        V = missile_data.get("current_velocity", 100.0)
+        
+        # 안전장치: V가 0에 가까우면 댐핑 효과 무시
+        if V < 1.0:
+            V = 1.0
+        
+        # 3. 무차원화된 각속도
+        q_hat = q_pitch_rate * L_ref / (2.0 * V)
+        r_hat = r_yaw_rate * L_ref / (2.0 * V)
+        
+        # 4. 댐핑 모멘트 계수 계산
+        Cm_damping = cm_q_damping * q_hat
+        Cn_damping = cn_r_damping * r_hat
+        
+        # 5. 총 모멘트 계수 (기본 + 댐핑)
+        Cm_base = cm_base * np.sin(alpha_rad)
+        Cm_total = Cm_base + Cm_damping  # ✅ 댐핑 추가!
+        
+        Cn_base = 0.0
+        Cn_total = Cn_base + Cn_damping  # ✅ 댐핑 추가!
+        
+        Cl_roll = 0.0
+        
+        return Cd, Cl, Cm_total, Cn_total, Cl_roll
         
 # Neural ODE 상태 벡터 정의
 class StateVector:
@@ -210,6 +261,11 @@ ENHANCED_MISSILE_TYPES = {
         "reference_area": np.pi * (0.88/2)**2,
         "cd_base": 0.25,
         
+        #6dof
+        "cm_q_damping": -10.0,
+        "cn_r_damping": -8.0,
+        "cl_p_damping": -5.0,
+
         # Neural ODE 호환 함수들
         "thrust_profile": lambda t: 5860 * 9.81 * 230 / 65 if t < 65 else 0,
         "mass_flow_rate": lambda t: 4875 / 65 if t < 65 else 0,
